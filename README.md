@@ -1,20 +1,19 @@
-````markdown
 # TikTok Virality Predictor
 
-Dieses Projekt implementiert eine Machine-Learning-Pipeline, die vorhersagt, ob ein TikTok-Video "viral" geht (definiert als das Erreichen der Top 20% der Aufrufzahlen). Die Klassifikation basiert ausschließlich auf Video-Metadaten und den zugehörigen Transkriptionstexten.
+This project implements a machine learning pipeline that predicts whether a TikTok video will go "viral" (defined as reaching the top 20% of view counts). The classification is based exclusively on video metadata and the corresponding transcription texts.
 
-## Übersicht und Ergebnisse
+## Overview and Results
 
-Das Ziel des Projekts war der Aufbau einer vollständigen Data-Science-Pipeline von der Datenbereinigung über Feature Engineering bis hin zur Evaluierung. Eine zentrale Herausforderung war der stark unbalancierte Datensatz (80/20 Split).
+The goal of this project was to build a complete data science pipeline from data cleaning and feature engineering to evaluation. A key challenge was handling the highly imbalanced dataset (80/20 split).
 
-* **Bestes Modell:** Logistic Regression
+* **Best Model:** Logistic Regression
 * **Recall (Viral Class):** 1.00 (100%)
 * **F1-Score:** 0.576
-* **Angewandte Methoden:** TF-IDF (inkl. N-Grams), Probability Threshold Tuning, Class Weighting.
+* **Applied Methods:** TF-IDF (incl. N-grams), Probability Threshold Tuning, Class Weighting.
 
-Hinweis zur Modellperformance: Ein F1-Score von ca. 0.58 stellt für diesen Datensatz ein realistisches Limit dar. Faktoren wie Veröffentlichungszeitpunkt oder der Zufallsfaktor des Algorithmus lassen sich aus Pre-Upload-Metadaten nicht ableiten. Um das Verpassen potenziell viraler Trends zu minimieren, wurde das Modell durch Threshold-Anpassung gezielt auf einen maximalen Recall kalibriert.
+Note on model performance: An F1-score of ~0.58 represents a realistic limit for this dataset. Factors like upload timing or the randomness of the algorithm cannot be derived from pre-upload metadata. To minimize missing potentially viral trends, the model was specifically calibrated for maximum recall through threshold tuning.
 
-## Technologien
+## Technologies
 
 * Python 3
 * pandas
@@ -24,34 +23,34 @@ Hinweis zur Modellperformance: Ein F1-Score von ca. 0.58 stellt für diesen Date
 
 ## Feature Engineering
 
-Um Data Leakage zu vermeiden, wurden alle Post-Upload-Metriken (Likes, Shares, Comments) konsequent aus dem Trainingsset entfernt. Aus den verbleibenden Daten wurden folgende Features generiert:
+To prevent data leakage, all post-upload metrics (likes, shares, comments) were strictly removed from the training set. The following features were generated from the remaining data:
 
-1. **Textmetriken:** Wortanzahl, Textlänge, Anteil an Großbuchstaben sowie die Häufigkeit von Satz- und Fragezeichen.
-2. **Hook-Extraktion:** Die ersten drei Wörter des Videos wurden als separates kategorisches Merkmal extrahiert.
-3. **NLP:** Der Rohtext wurde mittels `TfidfVectorizer` in numerische Vektoren transformiert (unter Ausschluss von Stopwörtern und Einbezug von Bi- und Tri-Grams).
+1. **Text Metrics:** Word count, text length, ratio of uppercase letters, and the frequency of exclamation marks and question marks.
+2. **Hook Extraction:** The first three words of the video were extracted as a separate categorical feature.
+3. **NLP:** The raw text was transformed into numerical vectors using `TfidfVectorizer` (excluding stop words and including bi- and tri-grams).
 
-## Projektstruktur
+## Project Structure
 
-* `dataloader.py`: Laden der Rohdaten.
-* `preprocess.py`: Datenbereinigung, Label-Generierung (Target) und Feature Engineering.
-* `model.py`: Definition der Scikit-Learn Pipelines, Modeltraining, Threshold Tuning und Metrik-Evaluierung.
-* `main.py`: Einstiegspunkt zur Ausführung der gesamten Pipeline.
-* `data/tiktok_dataset.csv`: Der verwendete Datensatz.
+* `dataloader.py`: Loads the raw data.
+* `preprocess.py`: Data cleaning, label generation (target), and feature engineering.
+* `model.py`: Definition of the Scikit-Learn pipelines, model training, threshold tuning, and metric evaluation.
+* `main.py`: Entry point to execute the entire pipeline.
+* `data/tiktok_dataset.csv`: The dataset used.
 
-## Installation und Ausführung
+## Installation and Usage
 
-Repository klonen:
+Clone the repository:
 ```bash
 git clone [https://github.com/USERNAME/tiktok-virality-predictor.git](https://github.com/USERNAME/tiktok-virality-predictor.git)
 cd tiktok-virality-predictor
 ```
 
-Abhängigkeiten installieren:
+Install dependencies:
 ```bash
 pip install pandas numpy scikit-learn xgboost
 ```
 
-Pipeline starten:
+Run the pipeline:
 ```bash
 python main.py
 ```
