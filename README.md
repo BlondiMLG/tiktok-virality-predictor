@@ -1,56 +1,144 @@
 # TikTok Virality Predictor
 
-This project implements a machine learning pipeline that predicts whether a TikTok video will go "viral" (defined as reaching the top 20% of view counts). The classification is based exclusively on video metadata and the corresponding transcription texts.
+End-to-end machine learning project to predict whether a TikTok video becomes viral (top quantile by `video_view_count`) using pre-upload metadata and transcript text.
 
-## Overview and Results
+This repository is built to be portfolio-ready:
 
-The goal of this project was to build a complete data science pipeline from data cleaning and feature engineering to evaluation. A key challenge was handling the highly imbalanced dataset (80/20 split).
+- Reproducible train/validation/test split
+- Leakage-aware feature engineering
+- Multiple model families (LogReg, Random Forest, XGBoost)
+- Cross-validation, optional randomized hyperparameter search, and optional probability calibration
+- Threshold tuning on the validation split (aligned with reported validation metrics)
+- Artifact export for clean result tracking
+- Automatic diagnostic plot and error-analysis export
 
-* **Best Model:** Logistic Regression
-* **Recall (Viral Class):** 1.00 (100%)
-* **F1-Score:** 0.576
-* **Applied Methods:** TF-IDF (incl. N-grams), Probability Threshold Tuning, Class Weighting.
+## Problem Definition
 
-Note on model performance: An F1-score of ~0.58 represents a realistic limit for this dataset. Factors like upload timing or the randomness of the algorithm cannot be derived from pre-upload metadata. To minimize missing potentially viral trends, the model was specifically calibrated for maximum recall through threshold tuning.
+Binary classification task:
 
-## Technologies
+- `viral = 1` if `video_view_count` exceeds the selected quantile threshold (default: 80th percentile)
+- `viral = 0` otherwise
 
-* Python 3
-* pandas
-* numpy
-* scikit-learn
-* xgboost
+The dataset is imbalanced (roughly 80/20), so the main metrics are:
 
-## Feature Engineering
+- F1 score
+- PR-AUC (average precision)
+- Precision/Recall trade-off at tuned threshold
 
-To prevent data leakage, all post-upload metrics (likes, shares, comments) were strictly removed from the training set. The following features were generated from the remaining data:
+## Pipeline Overview
 
-1. **Text Metrics:** Word count, text length, ratio of uppercase letters, and the frequency of exclamation marks and question marks.
-2. **Hook Extraction:** The first three words of the video were extracted as a separate categorical feature.
-3. **NLP:** The raw text was transformed into numerical vectors using `TfidfVectorizer` (excluding stop words and including bi- and tri-grams).
+1. **Load + validate data**
+   - checks file existence and non-empty dataset
+   - optional **schema normalization** for other TikTok CSV exports (`--dataset`; see `data/KAGGLE_DATASETS.md`)
+2. **Clean data**
+   - normalizes key categorical fields
+   - handles missing duration values
+3. **Create target**
+   - threshold computed on train split only
+4. **Train / validation / test split**
+   - stratification uses a **proxy label**: whether `video_view_count` is above the chosen quantile **within that split**. This stabilizes class balance in each fold. The actual `viral` label always uses the **single threshold learned from the training split only**, so the proxy is not the same as the final `y`—it is only for stratification.
+5. **Feature engineering**
+   - text statistics (`word_count`, `uppercase_ratio`, `text_density`, etc.)
+   - duration bucketing
+   - hook feature (`hook_3_words`)
+   - strict removal of leakage columns (post-upload engagement metrics)
+6. **Modeling**
+   - TF-IDF (1-3 grams) + numeric scaling + one-hot categorical encoding via `ColumnTransformer`
+   - optional `RandomizedSearchCV` (3-fold) on train for each model family
+   - optional `CalibratedClassifierCV` (3-fold on train; validation stays unused for fitting calibrators)
+   - 5-fold stratified CV metrics on train (same hyperparameters as the final base estimator; calibration wrapper is not cross-validated in that step)
+   - threshold search on validation set (`f1`, `precision`, or `f1_with_min_precision`)
+7. **Evaluation + export**
+   - validation metrics at the chosen threshold (for model selection)
+   - full test metrics per model (holdout)
+   - saves artifacts to `artifacts/` (summary, metadata, plots, error analysis)
 
 ## Project Structure
 
-* `dataloader.py`: Loads the raw data.
-* `preprocess.py`: Data cleaning, label generation (target), and feature engineering.
-* `model.py`: Definition of the Scikit-Learn pipelines, model training, threshold tuning, and metric evaluation.
-* `main.py`: Entry point to execute the entire pipeline.
-* `data/tiktok_dataset.csv`: The dataset used.
+- `dataloader.py` - load CSV and apply schema normalization
+- `dataset_normalize.py` - maps Kaggle-style columns to the canonical pipeline schema
+- `data/KAGGLE_DATASETS.md` - TikTok-only Kaggle / export notes
+- `preprocess.py` - cleaning, target creation, feature engineering
+- `model.py` - preprocessors, model builders, tuning, CV, threshold tuning, evaluation
+- `main.py` - orchestration and artifact export
+- `tests/test_smoke.py` — loader, schema normalization, clean/target/featurize smoke tests
+- `tests/test_model.py` — threshold utilities, stratification helper, CV + evaluation smoke tests on synthetic frames
+- `requirements.txt` - pinned Python dependencies
+- `artifacts/` - generated run outputs (gitignored; reproduce with `python main.py`):
+  - `model_summary.csv`
+  - `run_metadata.json`
+  - `plots/*.png` (PR, ROC, confusion matrix per model)
+  - `error_analysis_<model>.csv`
 
-## Installation and Usage
+## Installation
 
-Clone the repository:
 ```bash
-git clone [https://github.com/USERNAME/tiktok-virality-predictor.git](https://github.com/USERNAME/tiktok-virality-predictor.git)
-cd tiktok-virality-predictor
+pip install -r requirements.txt
 ```
 
-Install dependencies:
+Run tests:
+
 ```bash
-pip install pandas numpy scikit-learn xgboost
+python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-Run the pipeline:
+## Usage
+
+Default run:
+
 ```bash
 python main.py
 ```
+
+Run with custom options:
+
+```bash
+python main.py --data-path data/tiktok_claims.csv --quantile 0.80 --threshold-metric f1_with_min_precision --min-precision 0.50 --min-recall 0.20 --artifact-dir artifacts
+```
+
+Use another TikTok CSV with `play_count`-style columns:
+
+```bash
+python main.py --data-path data/my_tiktok_export.csv --dataset tiktok_engagement --artifact-dir artifacts
+```
+
+Enable hyperparameter search and calibration:
+
+```bash
+python main.py --tune --tune-iter 24 --calibrate --calibrate-method sigmoid
+```
+
+CLI options:
+
+- `--data-path`: path to dataset CSV
+- `--dataset`: `auto`, `tiktok_claims` (default column names), or `tiktok_engagement` (`play_count` / `digg_count`-style TikTok exports); see `data/KAGGLE_DATASETS.md`
+- `--quantile`: virality quantile threshold (default `0.80`)
+- `--threshold-metric`: optimize threshold for `f1`, `precision`, or `f1_with_min_precision`
+- `--min-precision`: precision floor used by `f1_with_min_precision` (default `0.50`)
+- `--min-recall`: recall floor used by `f1_with_min_precision` (default `0.20`)
+- `--model-selection`: how to pick the reported best model: `val_f1` (default), `val_pr_auc`, or `cv_f1` (CV is at probability threshold 0.5; validation metrics use the tuned threshold)
+- `--tune`: run randomized hyperparameter search per model on train
+- `--tune-iter`: sampled configurations per model when `--tune` is set (default `18`)
+- `--calibrate`: wrap the classifier with `CalibratedClassifierCV` (fit with 3-fold CV on train)
+- `--calibrate-method`: `sigmoid` (Platt) or `isotonic`
+- `--artifact-dir`: output directory for run artifacts
+
+## How To Read Results
+
+For each model you get:
+
+- **Cross-validation metrics** (`cv_f1_mean`, `cv_pr_auc_mean`, etc.) from train (threshold 0.5 within each fold)
+- **Validation metrics at tuned threshold** (`val_f1`, `val_precision`, `val_recall`, `val_pr_auc`)
+- **Best threshold** selected on validation split
+- **Test metrics** (`accuracy`, `precision`, `recall`, `f1`, `pr_auc`, `roc_auc`)
+- **Calibration proxy** (`brier`) for probability quality
+- **Error analysis file** with true/pred labels and confidence
+- **Plots**: PR curve (legend shows **AP**, matching `average_precision_score`), ROC curve, confusion matrix
+
+Use `pr_auc`, `precision`, and `recall` as primary guidance for imbalanced data.
+
+## Optional extensions
+
+- Notebook or report slicing error-analysis CSVs by metadata (FP vs FN)
+- Holdout from another period or source for stronger generalization claims
+- Serialize the trained `Pipeline` (e.g. `joblib`) and record a hash of the training CSV for reproducibility

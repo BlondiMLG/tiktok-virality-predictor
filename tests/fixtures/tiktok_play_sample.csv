@@ -1,0 +1,4 @@
+play_count,digg_count,share_count,comment_count,download_count,duration,description,claim
+500000,12000,300,400,50,45,hello world sample caption,claim
+1200000,89000,1200,5000,200,32,another desc here,opinion
+80000,900,10,5,0,15,short,unknown
